@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQP True Score — Interactive Tool</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+  :root {
+    --blue: #344d79;
+    --black: #020202;
+    --grey-light: #d1d1d1;
+    --grey-mid: #757575;
+    --white: #ffffff;
+    --gold: #ffc054;
+    --lime: #d8ff7a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f6f7f9;
+    color: var(--black);
+    line-height: 1.45;
+  }
+  .wrap {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 28px 24px 60px;
+  }
+  header h1 {
+    color: var(--blue);
+    margin: 0 0 6px;
+    font-size: 28px;
+    letter-spacing: -0.3px;
+  }
+  header p.subtitle {
+    color: var(--grey-mid);
+    margin: 0 0 4px;
+    font-size: 14px;
+  }
+  header p.formula {
+    color: var(--grey-mid);
+    margin: 0 0 20px;
+    font-size: 13px;
+    font-style: italic;
+  }
+  header p.formula code {
+    background: var(--white);
+    padding: 2px 6px;
+    border-radius: 3px;
+    color: var(--blue);
+    font-weight: bold;
+    font-style: normal;
+    border: 1px solid var(--grey-light);
+  }
+
+  .upload-zone {
+    background: var(--white);
+    border: 2px dashed var(--grey-light);
+    border-radius: 8px;
+    padding: 40px 24px;
+    text-align: center;
+    transition: border-color 0.15s, background 0.15s;
+    cursor: pointer;
+  }
+  .upload-zone.dragover {
+    border-color: var(--blue);
+    background: #eef2f8;
+  }
+  .upload-zone h2 {
+    margin: 0 0 8px;
+    color: var(--blue);
+    font-size: 18px;
+  }
+  .upload-zone p {
+    margin: 4px 0;
+    color: var(--grey-mid);
+    font-size: 13px;
+  }
+  .upload-zone button {
+    margin-top: 14px;
+    background: var(--blue);
+    color: var(--white);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .upload-zone button:hover { background: #2a3f63; }
+  .upload-zone input[type=file] { display: none; }
+
+  .error {
+    background: #fdeaea;
+    color: #a02020;
+    border-left: 4px solid #a02020;
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 3px;
+    font-size: 14px;
+  }
+
+  #results { display: none; }
+  #results.visible { display: block; }
+
+  .meta-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 24px 0 16px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .meta-bar .meta-info {
+    font-size: 13px;
+    color: var(--grey-mid);
+  }
+  .meta-bar .meta-info strong {
+    color: var(--black);
+  }
+  .meta-bar .reload-btn {
+    background: var(--white);
+    border: 1px solid var(--grey-light);
+    color: var(--blue);
+    padding: 6px 12px;
+    border-radius: 3px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .meta-bar .reload-btn:hover { background: #eef2f8; }
+
+  .validation {
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .validation.ok {
+    background: #eaf7ea;
+    color: #2a6d2a;
+    border-left: 4px solid #2a6d2a;
+  }
+  .validation.warn {
+    background: #fdf0d5;
+    color: #8a5a10;
+    border-left: 4px solid var(--gold);
+  }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .kpi {
+    background: var(--white);
+    border: 1px solid var(--grey-light);
+    border-radius: 6px;
+    padding: 16px;
+    border-top: 3px solid var(--blue);
+  }
+  .kpi.gold { border-top-color: var(--gold); }
+  .kpi.lime { border-top-color: var(--lime); }
+  .kpi .label {
+    font-size: 11px;
+    color: var(--grey-mid);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .kpi .value {
+    font-size: 22px;
+    font-weight: bold;
+    color: var(--blue);
+    line-height: 1.1;
+  }
+  .kpi .sub {
+    font-size: 11px;
+    color: var(--grey-mid);
+    margin-top: 4px;
+  }
+
+  .chart-card {
+    background: var(--white);
+    border: 1px solid var(--grey-light);
+    border-radius: 6px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .chart-card h3 {
+    margin: 0 0 4px;
+    color: var(--blue);
+    font-size: 16px;
+  }
+  .chart-card p.chart-desc {
+    margin: 0 0 16px;
+    font-size: 12px;
+    color: var(--grey-mid);
+  }
+  .chart-wrap {
+    position: relative;
+    height: 420px;
+  }
+  .chart-wrap.tall { height: 520px; }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .controls label {
+    font-size: 12px;
+    color: var(--grey-mid);
+  }
+  .controls select, .controls input[type=number] {
+    padding: 4px 8px;
+    border: 1px solid var(--grey-light);
+    border-radius: 3px;
+    font-size: 13px;
+    background: var(--white);
+  }
+
+  /* ---------- Funnel diagnostic ---------- */
+  .funnel-layout {
+    display: grid;
+    grid-template-columns: minmax(360px, 52%) 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .funnel-layout { grid-template-columns: 1fr; }
+  }
+  .funnel-stages svg { width: 100%; height: auto; display: block; }
+  .funnel-stages .band {
+    cursor: pointer;
+    transition: filter 0.12s;
+  }
+  .funnel-stages .band:hover { filter: brightness(1.1); }
+  .funnel-stages .band.active .band-shape {
+    stroke: var(--gold);
+    stroke-width: 3.5;
+  }
+  .funnel-stages .band.active.b-click .band-shape,
+  .funnel-stages .band.active.b-purchase .band-shape {
+    stroke: var(--blue);
+  }
+  .funnel-stages text { font-family: Arial, Helvetica, sans-serif; }
+
+  .funnel-detail {
+    background: #fafbfc;
+    border: 1px solid var(--grey-light);
+    border-radius: 6px;
+    padding: 16px;
+    min-height: 380px;
+  }
+  .funnel-detail h4 {
+    margin: 0 0 2px;
+    color: var(--blue);
+    font-size: 15px;
+  }
+  .funnel-detail p.fix {
+    margin: 0 0 14px;
+    font-size: 12px;
+    color: var(--grey-mid);
+  }
+  .funnel-detail p.fix strong { color: var(--black); }
+  .check-details {
+    background: var(--white);
+    border: 1px solid var(--grey-light);
+    border-left: 3px solid var(--gold);
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 14px;
+  }
+  .check-details summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--blue);
+    user-select: none;
+  }
+  .check-details p.fix { margin: 10px 0 6px; }
+  .check-list {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+    color: var(--black);
+  }
+  .check-list li { margin-bottom: 5px; line-height: 1.4; }
+  .query-item {
+    background: var(--white);
+    border: 1px solid var(--grey-light);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+  }
+  .query-item .q-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .query-item .q-name {
+    font-weight: bold;
+    font-size: 13px;
+    color: var(--black);
+    overflow-wrap: anywhere;
+  }
+  .query-item .q-points {
+    font-size: 12px;
+    color: var(--blue);
+    font-weight: bold;
+    white-space: nowrap;
+  }
+  .query-item .q-bar {
+    height: 5px;
+    border-radius: 3px;
+    background: #eef0f3;
+    margin-bottom: 6px;
+    overflow: hidden;
+  }
+  .query-item .q-bar > div {
+    height: 100%;
+    background: var(--gold);
+  }
+  .query-item .q-ratios {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .ratio-chip {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background: #eef0f3;
+    color: var(--grey-mid);
+    font-variant-numeric: tabular-nums;
+  }
+  .ratio-chip.good { background: var(--lime); color: #3a5210; font-weight: bold; }
+  .ratio-chip.bad  { background: #fdeaea; color: #a02020; font-weight: bold; }
+  .funnel-detail .empty-msg {
+    color: var(--grey-mid);
+    font-size: 13px;
+    text-align: center;
+    padding: 60px 20px;
+  }
+  .funnel-detail .show-more {
+    width: 100%;
+    background: var(--white);
+    border: 1px solid var(--grey-light);
+    color: var(--blue);
+    padding: 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .funnel-detail .show-more:hover { background: #eef2f8; }
+  .baseline-note {
+    font-size: 11px;
+    color: var(--grey-mid);
+    margin-top: 14px;
+    font-style: italic;
+  }
+  .threshold-controls {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-bottom: 16px;
+    padding: 10px 14px;
+    background: #fafbfc;
+    border: 1px solid var(--grey-light);
+    border-radius: 4px;
+  }
+  .threshold-controls label { font-size: 12px; color: var(--grey-mid); }
+  .threshold-controls input {
+    width: 64px;
+    padding: 3px 6px;
+    border: 1px solid var(--grey-light);
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  table.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  table.data-table th {
+    background: var(--blue);
+    color: var(--white);
+    padding: 8px 6px;
+    text-align: left;
+    font-weight: bold;
+    font-size: 11px;
+    position: sticky;
+    top: 0;
+  }
+  table.data-table td {
+    padding: 6px;
+    border-bottom: 1px solid var(--grey-light);
+  }
+  table.data-table tr.top10 td:first-child {
+    background: var(--gold);
+    font-weight: bold;
+  }
+  table.data-table td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .table-scroll {
+    max-height: 520px;
+    overflow-y: auto;
+    border: 1px solid var(--grey-light);
+    border-radius: 4px;
+  }
+  .search-box {
+    width: 240px;
+    padding: 6px 10px;
+    border: 1px solid var(--grey-light);
+    border-radius: 3px;
+    font-size: 13px;
+  }
+  .download-btn {
+    background: var(--gold);
+    color: var(--black);
+    border: none;
+    padding: 8px 14px;
+    border-radius: 3px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-left: auto;
+  }
+  .download-btn:hover { background: #f5b544; }
+
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid var(--grey-light);
+    color: var(--grey-mid);
+    font-size: 11px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>SQP True Score</h1>
+    <p class="subtitle">Reveal the real magnitude behind Amazon's Search Query Score ranks</p>
+    <p class="formula">
+      <code>True Score = Impressions + 37 × Clicks + 256 × Cart Adds + 703 × Purchases</code>
+      &nbsp;— computed on your own ASIN or Brand counts.
+    </p>
+  </header>
+
+  <div id="uploadZone" class="upload-zone">
+    <h2>Upload SQP Report</h2>
+    <p>Drag &amp; drop your Amazon Search Query Performance CSV here</p>
+    <p style="font-size:11px;">Works with ASIN-view and Brand-view exports, any marketplace, any reporting range</p>
+    <button type="button" onclick="document.getElementById('fileInput').click()">Choose CSV file</button>
+    <input type="file" id="fileInput" accept=".csv,text/csv">
+  </div>
+
+  <div id="errorBox"></div>
+
+  <div id="results">
+    <div class="meta-bar">
+      <div class="meta-info" id="reportMeta"></div>
+      <button class="reload-btn" onclick="resetTool()">← Upload a different report</button>
+    </div>
+
+    <div id="validationBox" class="validation"></div>
+
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <div class="chart-card">
+      <h3>Funnel Diagnostic — where does each query get stuck?</h3>
+      <p class="chart-desc">
+        Every query is assigned to the funnel stage where its journey effectively stops, measured against the baseline
+        funnel implied by Amazon's weights (~2.7% CTR · ~14.5% click→cart · ~36% cart→purchase).
+        Click a stage to see which queries live there — sized by True Score, with the broken ratio flagged.
+      </p>
+      <div class="threshold-controls">
+        <label>Min impressions to diagnose: <input type="number" id="minImpr" value="100" min="0" step="50"></label>
+        <label>Or min clicks: <input type="number" id="minClicks" value="3" min="0" step="1"></label>
+      </div>
+      <div class="funnel-layout">
+        <div class="funnel-stages" id="funnelStages"></div>
+        <div class="funnel-detail" id="funnelDetail">
+          <div class="empty-msg">← Click a funnel stage to see its queries</div>
+        </div>
+      </div>
+      <p class="baseline-note">
+        Baseline rates are inferred from Amazon's True Score weights (1 / 37 / 256 / 703) — a consistent yardstick,
+        not an official Amazon benchmark. A query passes a stage when its rate reaches the baseline.
+      </p>
+    </div>
+
+    <div class="chart-card">
+      <h3>1. Rank vs. Magnitude — the reveal</h3>
+      <p class="chart-desc">
+        Search Query Score is a rank (1, 2, 3…). This chart shows what each rank is actually worth in True Score points.
+        The gap between rank 1 and rank 20 is almost always huge — and never obvious from the rank alone.
+      </p>
+      <div class="controls">
+        <label>Show top <input type="number" id="topNBar" value="20" min="5" max="50" step="1" style="width:60px"> ranks</label>
+      </div>
+      <div class="chart-wrap"><canvas id="chartMagnitude"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>2. Concentration Curve — where your funnel value lives</h3>
+      <p class="chart-desc">
+        Cumulative share of total True Score across all queries. The gold and lime markers show how few queries
+        make up 50% and 80% of your entire search funnel value. This is your defence list.
+      </p>
+      <div class="chart-wrap tall"><canvas id="chartPareto"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>3. Funnel Composition — points earned by stage</h3>
+      <p class="chart-desc">
+        Every True Score bar broken into its four funnel components (Impressions × 1, Clicks × 37, Cart Adds × 256, Purchases × 703).
+        Instantly reveals which queries are purchase-driven vs. impression-inflated.
+      </p>
+      <div class="controls">
+        <label>Show top <input type="number" id="topNStack" value="15" min="5" max="30" step="1" style="width:60px"> queries</label>
+      </div>
+      <div class="chart-wrap tall"><canvas id="chartStack"></canvas></div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Full Ranking Table</h3>
+      <div class="controls">
+        <input type="text" id="searchBox" class="search-box" placeholder="Filter queries…">
+        <button class="download-btn" onclick="downloadCSV()">Download CSV</button>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table" id="dataTable">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Search Query</th>
+              <th style="text-align:right">True Score</th>
+              <th style="text-align:right">% Total</th>
+              <th style="text-align:right">Cum %</th>
+              <th style="text-align:right">Impr.</th>
+              <th style="text-align:right">Clicks</th>
+              <th style="text-align:right">Cart</th>
+              <th style="text-align:right">Purch.</th>
+              <th style="text-align:right">Volume</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    SQP True Score Interactive Tool · Formula: Impressions + 37×Clicks + 256×Cart Adds + 703×Purchases · All processing happens in your browser · No data leaves your device
+  </footer>
+</div>
+
+<script>
+const W_CLICK = 37, W_CART = 256, W_PURCHASE = 703;
+const COLORS = {
+  blue: '#344d79',
+  black: '#020202',
+  greyLight: '#d1d1d1',
+  greyMid: '#757575',
+  white: '#ffffff',
+  gold: '#ffc054',
+  lime: '#d8ff7a',
+};
+
+let DATA = null;
+let charts = { magnitude: null, pareto: null, stack: null };
+
+// ---------- Upload handling ----------
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', (e) => {
+  if (e.target.tagName !== 'BUTTON') fileInput.click();
+});
+uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', (e) => {
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function showError(msg) {
+  document.getElementById('errorBox').innerHTML = `<div class="error"><strong>Error:</strong> ${msg}</div>`;
+}
+function clearError() { document.getElementById('errorBox').innerHTML = ''; }
+
+function handleFile(file) {
+  clearError();
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const text = e.target.result;
+      const parsed = parseSQP(text);
+      DATA = parsed;
+      renderAll();
+      document.getElementById('results').classList.add('visible');
+      uploadZone.style.display = 'none';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error(err);
+      showError(err.message || 'Failed to parse file.');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function resetTool() {
+  DATA = null;
+  activeStage = null;
+  detailShown = 15;
+  Object.values(charts).forEach(c => { if (c) c.destroy(); });
+  charts = { magnitude: null, pareto: null, stack: null };
+  document.getElementById('results').classList.remove('visible');
+  uploadZone.style.display = '';
+  fileInput.value = '';
+  clearError();
+}
+
+// ---------- CSV parsing ----------
+function parseSQP(text) {
+  // Strip UTF-8 BOM — some marketplace exports include it and it silently breaks the first-column match
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+  // Robust header finder: scan the first several lines and try multiple delimiters.
+  // Amazon SQP exports vary — sometimes 0 metadata rows, sometimes 1, occasionally 2.
+  // Excel re-saves (common in EU locales) switch the delimiter from ',' to ';'.
+  const MAX_HEADER_SCAN = 5;
+  const DELIMITERS = [',', ';', '\t'];
+  const lines = text.split(/\r?\n/);
+
+  let headerLineIdx = -1;
+  let chosenDelim = ',';
+  for (let i = 0; i < Math.min(MAX_HEADER_SCAN, lines.length); i++) {
+    if (!lines[i] || !lines[i].trim()) continue;
+    for (const d of DELIMITERS) {
+      const probe = Papa.parse(lines[i], { delimiter: d });
+      const fields = (probe.data[0] || []).map(f => String(f).trim());
+      if (fields.length < 2) continue;
+      // Must contain a distinct "Search Query" field (case/whitespace tolerant)
+      if (fields.some(f => /^search\s*query$/i.test(f))) {
+        headerLineIdx = i;
+        chosenDelim = d;
+        break;
+      }
+    }
+    if (headerLineIdx !== -1) break;
+  }
+
+  if (headerLineIdx === -1) {
+    const preview = lines.slice(0, 3).map((l, i) => `Line ${i + 1}: ${l.slice(0, 120)}`).join('\n');
+    throw new Error(
+      'Could not find the "Search Query" header row in the first 5 lines of the file. ' +
+      'Make sure this is an Amazon Search Query Performance export (not Top Search Terms or Search Catalog Performance).\n\n' +
+      'File preview:\n' + preview
+    );
+  }
+
+  // Metadata line = whatever preceded the header (if anything)
+  const metaLine = headerLineIdx > 0 ? lines.slice(0, headerLineIdx).join(' ') : '';
+  const meta = { label: '', level: null, header: metaLine };
+
+  const brandMatch = metaLine.match(/(Brand|ASIN)=\["?([^"\]]+)"?\]/i);
+  if (brandMatch) meta.label = brandMatch[2];
+  const rngMatch = metaLine.match(/Reporting Range=\["?([^"\]]+)"?\]/i);
+  if (rngMatch) meta.label += (meta.label ? ' | ' : '') + rngMatch[1];
+  const weekMatch = metaLine.match(/Select (?:week|month|quarter)=\["?([^"\]]+)"?\]/i);
+  if (weekMatch) meta.label += (meta.label ? ' | ' : '') + weekMatch[1];
+
+  // Parse from the header row onward with the detected delimiter
+  const csvText = lines.slice(headerLineIdx).join('\n');
+  const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true, delimiter: chosenDelim });
+  const cols = parsed.meta.fields || [];
+  if (!findCol(cols, /^search\s*query$/i)) {
+    throw new Error('This does not look like an Amazon SQP export — could not find the "Search Query" column.');
+  }
+
+  const qCol = findCol(cols, /^search\s*query$/i);
+  const scoreCol = findCol(cols, /^search\s*query\s*score$/i);
+  const volCol = findCol(cols, /^search\s*query\s*volume$/i);
+
+  if (!scoreCol) throw new Error('Missing "Search Query Score" column.');
+
+  // Detect ASIN vs Brand
+  let level = null;
+  for (const lvl of ['ASIN', 'Brand']) {
+    if (findCol(cols, new RegExp(`^impressions:\\s*${lvl}\\s*count$`, 'i'))) { level = lvl; break; }
+  }
+  if (!level) throw new Error('Could not find "Impressions: ASIN Count" or "Impressions: Brand Count" column.');
+  meta.level = level;
+
+  const imprCol = findCol(cols, new RegExp(`^impressions:\\s*${level}\\s*count$`, 'i'));
+  const clkCol = findCol(cols, new RegExp(`^clicks:\\s*${level}\\s*count$`, 'i'));
+  const cartCol = findCol(cols, new RegExp(`^cart\\s*adds:\\s*${level}\\s*count$`, 'i'));
+  const purCol = findCol(cols, new RegExp(`^purchases:\\s*${level}\\s*count$`, 'i'));
+
+  const rows = [];
+  for (const r of parsed.data) {
+    const score = parseNum(r[scoreCol]);
+    if (score === null || isNaN(score)) continue;
+    const imp = parseNum(r[imprCol]) || 0;
+    const clk = parseNum(r[clkCol]) || 0;
+    const cart = parseNum(r[cartCol]) || 0;
+    const pur = parseNum(r[purCol]) || 0;
+    const trueScore = imp + W_CLICK * clk + W_CART * cart + W_PURCHASE * pur;
+    rows.push({
+      amazon_score: Math.round(score),
+      query: String(r[qCol] || '').trim(),
+      volume: volCol ? parseNum(r[volCol]) : null,
+      impressions: imp,
+      clicks: clk,
+      cart_adds: cart,
+      purchases: pur,
+      true_score: trueScore,
+    });
+  }
+
+  if (rows.length === 0) throw new Error('No valid rows found in the report.');
+
+  rows.sort((a, b) => a.amazon_score - b.amazon_score);
+
+  // Validation: check that true_score is monotonically non-increasing when sorted by amazon rank
+  let violations = 0;
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i].true_score > rows[i - 1].true_score) violations++;
+  }
+  // Ties
+  const valMap = new Map();
+  for (const r of rows) valMap.set(r.true_score, (valMap.get(r.true_score) || 0) + 1);
+  let ties = 0;
+  valMap.forEach(v => { if (v > 1) ties += v; });
+
+  // Cumulative
+  const total = rows.reduce((s, r) => s + r.true_score, 0);
+  let running = 0;
+  for (const r of rows) {
+    r.pct = total ? r.true_score / total : 0;
+    running += r.true_score;
+    r.cum_pct = total ? running / total : 0;
+  }
+
+  const queriesTo50 = rows.findIndex(r => r.cum_pct >= 0.5) + 1;
+  const queriesTo80 = rows.findIndex(r => r.cum_pct >= 0.8) + 1;
+
+  return {
+    rows, meta, total, violations, ties,
+    queriesTo50: queriesTo50 || rows.length,
+    queriesTo80: queriesTo80 || rows.length,
+    top1Share: total ? rows[0].true_score / total : 0,
+  };
+}
+
+function findCol(cols, re) {
+  for (const c of cols) if (re.test(String(c).trim())) return c;
+  return null;
+}
+function parseNum(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = Number(String(v).replace(/,/g, '').trim());
+  return isNaN(n) ? null : n;
+}
+function fmt(n) {
+  if (n === null || n === undefined || isNaN(n)) return '';
+  return Math.round(n).toLocaleString('en-US');
+}
+function fmtPct(n, dec = 1) {
+  return (n * 100).toFixed(dec) + '%';
+}
+
+// ---------- Rendering ----------
+function renderAll() {
+  renderMeta();
+  renderValidation();
+  renderKPIs();
+  classifyFunnel();
+  renderFunnel();
+  renderMagnitudeChart();
+  renderParetoChart();
+  renderStackChart();
+  renderTable();
+  bindControls();
+}
+
+// ---------- Funnel diagnostic ----------
+// Baseline funnel implied by the weights: 1/37 CTR, 37/256 click->cart, 256/703 cart->purchase
+const BASELINE = {
+  ctr: 1 / W_CLICK,            // ~2.70%
+  cartRate: W_CLICK / W_CART,  // ~14.45%
+  buyRate: W_CART / W_PURCHASE // ~36.42%
+};
+
+const STAGES = [
+  {
+    id: 'impression', cls: 'st-impression', name: 'Impression stage',
+    diag: 'Gets seen, but nobody clicks',
+    fix: 'These queries surface your listing in search results, but your result tile loses the click. Everything the shopper sees BEFORE clicking can be the cause:',
+    checks: [
+      'Title — does it match the query and make sense in the first ~75 characters shown',
+      'Main image — quality, clarity, and does it stand out next to the other results on that page',
+      'Price',
+      'Star rating and review count — shoppers compare these across the results at a glance',
+      'Deal badges — coupon, "Limited time deal", strike-through price (or your competitors have them and you don\'t)',
+      'Status badges — Best Seller, Amazon\'s Choice, "X bought in past month"',
+      'Relevance — is this query even your customer? A mismatch means low CTR no matter what you fix',
+    ],
+  },
+  {
+    id: 'click', cls: 'st-click', name: 'Click stage',
+    diag: 'They visit, then bounce',
+    fix: 'Shoppers click through but nothing convinces them to add to cart. What they judge on the listing page:',
+    checks: [
+      'Secondary images',
+      'Bullets and description — do they answer what THIS query is asking for',
+      'A+ content and Brand Story',
+      'Price',
+      'Reviews — rating, review count, and especially recent negative reviews near the top',
+      'Delivery time',
+      'Promotion',
+    ],
+  },
+  {
+    id: 'cart', cls: 'st-cart', name: 'Cart stage',
+    diag: 'They almost buy',
+    fix: 'They added to cart — intent is proven. Defend and scale:',
+    checks: [
+      'Protect organic rank on these terms',
+      'Prioritize these queries for PPC budget',
+      'Run exact-match campaigns on them',
+    ],
+  },
+  {
+    id: 'purchase', cls: 'st-purchase', name: 'Purchase stage',
+    diag: 'Your closers — converts end to end',
+    fix: 'These queries convert through the whole funnel. Nothing is broken — the job here is to defend and scale:',
+    checks: [
+      'Stock — never run out on these queries; a stockout here costs real orders immediately',
+      'Buy Box — keep owning it; monitor for hijackers and price changes',
+      'PPC defense — exact-match campaigns on these terms so competitors can\'t take the top of the page',
+      'Price stability — these convert at the current price; test increases carefully',
+      'Watch competitors targeting these terms with ads',
+      'Budget priority — when scaling ad spend, these queries earn it first',
+    ],
+  },
+  {
+    id: 'noise', cls: 'st-noise', name: 'Too early to tell',
+    diag: 'Not enough data to diagnose',
+    fix: 'Below the data threshold — any diagnosis would be noise, not signal:',
+    checks: [
+      'Revisit these when they accumulate more impressions or clicks',
+      'A monthly or quarterly SQP report gives most of these queries enough data to diagnose',
+      'If one of these queries matters to you strategically, drive traffic to it with PPC and re-check',
+    ],
+  },
+];
+
+let activeStage = null;
+let detailShown = 15;
+
+function classifyFunnel() {
+  const minImpr = parseInt(document.getElementById('minImpr').value) || 0;
+  const minClicks = parseInt(document.getElementById('minClicks').value) || 0;
+  const factor = 1.0; // query passes a stage at 100% of the implied baseline rate
+
+  const passCtr = BASELINE.ctr * factor;
+  const passCart = BASELINE.cartRate * factor;
+  const passBuy = BASELINE.buyRate * factor;
+
+  for (const r of DATA.rows) {
+    r.ctr = r.impressions > 0 ? r.clicks / r.impressions : 0;
+    r.cartRate = r.clicks > 0 ? r.cart_adds / r.clicks : 0;
+    r.buyRate = r.cart_adds > 0 ? r.purchases / r.cart_adds : 0;
+
+    // Noise gate: needs EITHER enough impressions OR enough clicks
+    if (r.impressions < minImpr && r.clicks < minClicks) {
+      r.stage = 'noise';
+      continue;
+    }
+    // Drop-off logic: deepest stage passed at >= factor x baseline
+    if (r.ctr < passCtr) {
+      r.stage = 'impression';
+    } else if (r.cartRate < passCart) {
+      r.stage = 'click';
+    } else if (r.buyRate < passBuy) {
+      r.stage = 'cart';
+    } else {
+      r.stage = 'purchase';
+    }
+  }
+}
+
+// ---------- SVG funnel geometry & rendering ----------
+const FUNNEL_GEO = {
+  cx: 210,            // funnel center x
+  labelX: 430,        // where callout labels start
+  viewW: 700,
+  // band boundaries: [y, halfWidth] top rim -> spout
+  bounds: [
+    { y: 42,  w: 190 },
+    { y: 150, w: 138 },
+    { y: 252, w: 94 },
+    { y: 348, w: 60 },
+    { y: 470, w: 46 },
+  ],
+};
+
+const STAGE_STYLE = {
+  impression: { fill: '#757575', dark: '#5e5e5e', light: '#8f8f8f', icon: 'eye',  text: '#ffffff' },
+  click:      { fill: '#ffc054', dark: '#e0a53e', light: '#ffd287', icon: 'click', text: '#020202' },
+  cart:       { fill: '#344d79', dark: '#283c5f', light: '#46639a', icon: 'cart', text: '#ffffff' },
+  purchase:   { fill: '#d8ff7a', dark: '#b8e05c', light: '#e6ffa3', icon: 'bag',  text: '#020202' },
+};
+
+function funnelIcon(kind, x, y, s, color) {
+  // s = scale unit (icon fits ~2s x 2s box centered at x,y)
+  const c = color;
+  switch (kind) {
+    case 'eye': // impressions — an eye
+      return `<g stroke="${c}" fill="none" stroke-width="${s * 0.16}">
+        <path d="M ${x - s} ${y} Q ${x} ${y - s * 0.85} ${x + s} ${y} Q ${x} ${y + s * 0.85} ${x - s} ${y} Z"/>
+        <circle cx="${x}" cy="${y}" r="${s * 0.32}" fill="${c}" stroke="none"/>
+      </g>`;
+    case 'click': // clicks — cursor arrow with click arcs
+      return `<g fill="${c}" stroke="${c}">
+        <path d="M ${x - s * 0.35} ${y - s * 0.55} L ${x - s * 0.35} ${y + s * 0.75} L ${x - s * 0.02} ${y + s * 0.42} L ${x + s * 0.22} ${y + s * 0.85} L ${x + s * 0.42} ${y + s * 0.72} L ${x + s * 0.18} ${y + s * 0.3} L ${x + s * 0.62} ${y + s * 0.28} Z" stroke-width="1"/>
+        <path d="M ${x - s * 0.85} ${y - s * 0.6} A ${s * 0.72} ${s * 0.72} 0 0 1 ${x + s * 0.15} ${y - s * 0.95}" fill="none" stroke-width="${s * 0.14}"/>
+      </g>`;
+    case 'cart': // cart adds — cart with plus
+      return `<g stroke="${c}" fill="none" stroke-width="${s * 0.15}" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M ${x - s * 0.9} ${y - s * 0.55} L ${x - s * 0.55} ${y - s * 0.55} L ${x - s * 0.3} ${y + s * 0.3} L ${x + s * 0.55} ${y + s * 0.3} L ${x + s * 0.78} ${y - s * 0.3} L ${x - s * 0.42} ${y - s * 0.3}"/>
+        <circle cx="${x - s * 0.15}" cy="${y + s * 0.66}" r="${s * 0.14}" fill="${c}"/>
+        <circle cx="${x + s * 0.42}" cy="${y + s * 0.66}" r="${s * 0.14}" fill="${c}"/>
+        <path d="M ${x + s * 0.55} ${y - s * 0.85} L ${x + s * 0.95} ${y - s * 0.85} M ${x + s * 0.75} ${y - s * 1.05} L ${x + s * 0.75} ${y - s * 0.65}"/>
+      </g>`;
+    case 'bag': // purchases — shopping bag with check
+      return `<g stroke="${c}" fill="none" stroke-width="${s * 0.15}" stroke-linejoin="round" stroke-linecap="round">
+        <path d="M ${x - s * 0.65} ${y - s * 0.45} L ${x + s * 0.65} ${y - s * 0.45} L ${x + s * 0.5} ${y + s * 0.8} L ${x - s * 0.5} ${y + s * 0.8} Z"/>
+        <path d="M ${x - s * 0.3} ${y - s * 0.45} L ${x - s * 0.3} ${y - s * 0.62} A ${s * 0.3} ${s * 0.34} 0 0 1 ${x + s * 0.3} ${y - s * 0.62} L ${x + s * 0.3} ${y - s * 0.45}"/>
+        <path d="M ${x - s * 0.25} ${y + s * 0.15} L ${x - s * 0.05} ${y + s * 0.38} L ${x + s * 0.32} ${y - s * 0.1}"/>
+      </g>`;
+  }
+  return '';
+}
+
+function bandPath(i) {
+  const g = FUNNEL_GEO;
+  const t = g.bounds[i], b = g.bounds[i + 1];
+  const ryT = t.w * 0.13, ryB = b.w * 0.13;
+  const h = b.y - t.y;
+  // concave inward-curving sides (cubic beziers), elliptical arcs top & bottom for 3D depth
+  return `M ${g.cx - t.w} ${t.y}
+    A ${t.w} ${ryT} 0 0 0 ${g.cx + t.w} ${t.y}
+    C ${g.cx + t.w} ${t.y + h * 0.45}, ${g.cx + b.w} ${t.y + h * 0.55}, ${g.cx + b.w} ${b.y}
+    A ${b.w} ${ryB} 0 0 1 ${g.cx - b.w} ${b.y}
+    C ${g.cx - b.w} ${t.y + h * 0.55}, ${g.cx - t.w} ${t.y + h * 0.45}, ${g.cx - t.w} ${t.y}
+    Z`;
+}
+
+function renderFunnel() {
+  const container = document.getElementById('funnelStages');
+  const g = FUNNEL_GEO;
+  const groups = {};
+  for (const s of STAGES) groups[s.id] = { count: 0, points: 0 };
+  for (const r of DATA.rows) {
+    groups[r.stage].count++;
+    groups[r.stage].points += r.true_score;
+  }
+
+  const mainStages = STAGES.filter(s => s.id !== 'noise');
+  let defs = '';
+  let bands = '';
+  let labels = '';
+
+  mainStages.forEach((s, i) => {
+    const st = STAGE_STYLE[s.id];
+    const grp = groups[s.id];
+    const ptsPct = DATA.total ? (grp.points / DATA.total * 100) : 0;
+    const t = g.bounds[i], b = g.bounds[i + 1];
+    const midY = (t.y + b.y) / 2;
+    const isActive = activeStage === s.id;
+
+    defs += `<linearGradient id="grad-${s.id}" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="${st.dark}"/>
+      <stop offset="0.45" stop-color="${st.light}"/>
+      <stop offset="1" stop-color="${st.dark}"/>
+    </linearGradient>`;
+
+    const iconSize = Math.max(15, Math.min(24, ((t.w + b.w) / 2) * 0.22));
+    bands += `<g class="band b-${s.id} ${isActive ? 'active' : ''}" data-stage="${s.id}">
+      <path class="band-shape" d="${bandPath(i)}" fill="url(#grad-${s.id})" stroke="none"/>
+      ${funnelIcon(st.icon, g.cx, midY + t.w * 0.06, iconSize, st.text)}
+    </g>`;
+
+    // callout labels
+    const lineStartX = g.cx + ((t.w + b.w) / 2) * 0.92;
+    labels += `<g class="band ${isActive ? 'active' : ''}" data-stage="${s.id}">
+      <line x1="${lineStartX}" y1="${midY}" x2="${g.labelX - 12}" y2="${midY}" stroke="#d1d1d1" stroke-width="1.2" stroke-dasharray="3 3"/>
+      <circle cx="${lineStartX}" cy="${midY}" r="3" fill="${st.fill === '#d8ff7a' ? '#b8e05c' : st.fill}"/>
+      <text x="${g.labelX}" y="${midY - 16}" font-size="15" font-weight="bold" fill="#344d79">${s.name}</text>
+      <text x="${g.labelX}" y="${midY + 2}" font-size="11" font-style="italic" fill="#757575">${s.diag}</text>
+      <text x="${g.labelX}" y="${midY + 21}" font-size="12.5" fill="#020202">
+        <tspan font-weight="bold">${grp.count.toLocaleString()}</tspan> queries · <tspan font-weight="bold">${ptsPct.toFixed(1)}%</tspan> of points
+      </text>
+    </g>`;
+  });
+
+  // top rim ellipse (funnel mouth interior)
+  const rim = g.bounds[0];
+  const rimEllipse = `<ellipse cx="${g.cx}" cy="${rim.y}" rx="${rim.w}" ry="${rim.w * 0.13}" fill="#4a4a4a"/>
+    <ellipse cx="${g.cx}" cy="${rim.y}" rx="${rim.w * 0.94}" ry="${rim.w * 0.115}" fill="#3a3a3a"/>`;
+
+  // drip from spout into the noise tray
+  const spout = g.bounds[g.bounds.length - 1];
+  const noiseGrp = groups['noise'];
+  const noisePct = DATA.total ? (noiseGrp.points / DATA.total * 100) : 0;
+  const isNoiseActive = activeStage === 'noise';
+  const trayY = spout.y + 34;
+  const noise = `<g class="band ${isNoiseActive ? 'active' : ''}" data-stage="noise">
+    <rect class="band-shape" x="${g.cx - 165}" y="${trayY}" width="330" height="52" rx="8"
+      fill="#ffffff" stroke="#d1d1d1" stroke-width="1.4" stroke-dasharray="6 4"/>
+    <text x="${g.cx}" y="${trayY + 22}" font-size="13" font-weight="bold" fill="#757575" text-anchor="middle">Too early to tell — not enough data</text>
+    <text x="${g.cx}" y="${trayY + 40}" font-size="12" fill="#757575" text-anchor="middle">${noiseGrp.count.toLocaleString()} queries · ${noisePct.toFixed(1)}% of points</text>
+  </g>`;
+
+  const svgH = trayY + 52 + 16;
+  container.innerHTML = `<svg viewBox="0 0 ${g.viewW} ${svgH}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Marketing funnel with query stages">
+    <defs>${defs}
+      <filter id="fShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#020202" flood-opacity="0.18"/>
+      </filter>
+    </defs>
+    <g filter="url(#fShadow)">${bands}</g>
+    ${rimEllipse}
+    ${labels}
+    ${noise}
+  </svg>`;
+
+  container.querySelectorAll('.band').forEach(el => {
+    el.addEventListener('click', () => {
+      activeStage = el.dataset.stage;
+      detailShown = 15;
+      renderFunnel();
+      renderFunnelDetail();
+    });
+  });
+}
+
+function renderFunnelDetail() {
+  const panel = document.getElementById('funnelDetail');
+  if (!activeStage) {
+    panel.innerHTML = '<div class="empty-msg">← Click a funnel stage to see its queries</div>';
+    return;
+  }
+  const stage = STAGES.find(s => s.id === activeStage);
+  const rows = DATA.rows
+    .filter(r => r.stage === activeStage)
+    .sort((a, b) => b.true_score - a.true_score);
+
+  if (rows.length === 0) {
+    panel.innerHTML = `<h4>${stage.name}</h4>
+      ${buildChecklist(stage, true)}
+      <div class="empty-msg">No queries in this stage 🎉</div>`;
+    return;
+  }
+
+  const maxPts = rows[0].true_score || 1;
+  const factor = 1.0;
+  const shown = rows.slice(0, detailShown);
+
+  const items = shown.map(r => {
+    const chips = buildRatioChips(r, factor);
+    const barW = Math.max(2, r.true_score / maxPts * 100);
+    return `<div class="query-item">
+      <div class="q-head">
+        <span class="q-name">#${r.amazon_score} ${escapeHtml(r.query)}</span>
+        <span class="q-points">${fmt(r.true_score)} pts · ${fmtPct(r.pct, 2)}</span>
+      </div>
+      <div class="q-bar"><div style="width:${barW}%"></div></div>
+      <div class="q-ratios">${chips}</div>
+    </div>`;
+  }).join('');
+
+  const moreBtn = rows.length > detailShown
+    ? `<button class="show-more" onclick="detailShown += 25; renderFunnelDetail();">Show ${Math.min(25, rows.length - detailShown)} more (${rows.length - detailShown} remaining)</button>`
+    : '';
+
+  panel.innerHTML = `<h4>${stage.name} — ${rows.length.toLocaleString()} queries</h4>
+    ${buildChecklist(stage, false)}
+    ${items}${moreBtn}`;
+}
+
+function buildChecklist(stage, open) {
+  const lis = stage.checks.map(c => `<li>${c}</li>`).join('');
+  return `<details class="check-details" ${open ? 'open' : ''}>
+    <summary>What to check — full list (${stage.checks.length})</summary>
+    <p class="fix">${stage.fix}</p>
+    <ul class="check-list">${lis}</ul>
+  </details>`;
+}
+
+function buildRatioChips(r, factor) {
+  if (r.stage === 'noise') {
+    return `<span class="ratio-chip">${fmt(r.impressions)} impr</span>
+            <span class="ratio-chip">${fmt(r.clicks)} clicks</span>
+            <span class="ratio-chip">${fmt(r.purchases)} purchases</span>`;
+  }
+  const defs = [
+    { label: 'CTR', val: r.ctr, base: BASELINE.ctr, broken: r.stage === 'impression', na: r.impressions === 0 },
+    { label: 'Click→Cart', val: r.cartRate, base: BASELINE.cartRate, broken: r.stage === 'click', na: r.clicks === 0 },
+    { label: 'Cart→Buy', val: r.buyRate, base: BASELINE.buyRate, broken: r.stage === 'cart', na: r.cart_adds === 0 },
+  ];
+  return defs.map(d => {
+    if (d.na) return `<span class="ratio-chip">${d.label}: —</span>`;
+    const pct = (d.val * 100).toFixed(1) + '%';
+    const basePct = (d.base * 100).toFixed(1) + '%';
+    let cls = '';
+    if (d.broken) cls = 'bad';
+    else if (d.val >= d.base) cls = 'good';
+    return `<span class="ratio-chip ${cls}" title="baseline ~${basePct}">${d.label}: ${pct}${d.broken ? ' ⚠' : ''}</span>`;
+  }).join('');
+}
+
+function refreshFunnel() {
+  classifyFunnel();
+  renderFunnel();
+  renderFunnelDetail();
+}
+
+
+function renderMeta() {
+  const m = DATA.meta;
+  document.getElementById('reportMeta').innerHTML =
+    `<strong>${m.label || 'SQP Report'}</strong> · ${m.level}-level · ${DATA.rows.length.toLocaleString()} queries`;
+}
+
+function renderValidation() {
+  const box = document.getElementById('validationBox');
+  if (DATA.violations === 0) {
+    box.className = 'validation ok';
+    box.innerHTML = `✓ Formula reproduces Amazon's ranking with 0 violations · ${DATA.ties} rows share tied True Score values`;
+  } else {
+    box.className = 'validation warn';
+    box.innerHTML = `⚠ ${DATA.violations} ordering violations found — formula did not fully reproduce Amazon's ranking for this report · ${DATA.ties} ties`;
+  }
+}
+
+function renderKPIs() {
+  const kpis = [
+    { label: 'Total True Score', value: fmt(DATA.total), sub: 'points across all queries', cls: '' },
+    { label: 'Queries → 50%', value: DATA.queriesTo50.toLocaleString(), sub: 'of your funnel value', cls: 'gold' },
+    { label: 'Queries → 80%', value: DATA.queriesTo80.toLocaleString(), sub: 'of your funnel value', cls: 'gold' },
+    { label: 'Top Query Share', value: fmtPct(DATA.top1Share, 1), sub: `"${DATA.rows[0].query.slice(0, 30)}${DATA.rows[0].query.length > 30 ? '…' : ''}"`, cls: 'lime' },
+    { label: 'Total Queries', value: DATA.rows.length.toLocaleString(), sub: `${DATA.meta.level}-level counts`, cls: '' },
+  ];
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k =>
+    `<div class="kpi ${k.cls}">
+       <div class="label">${k.label}</div>
+       <div class="value">${k.value}</div>
+       <div class="sub">${k.sub}</div>
+     </div>`
+  ).join('');
+}
+
+function truncate(s, n) {
+  s = String(s || '');
+  return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+function renderMagnitudeChart() {
+  const n = parseInt(document.getElementById('topNBar').value) || 20;
+  const top = DATA.rows.slice(0, n);
+  const labels = top.map(r => `#${r.amazon_score} ${truncate(r.query, 22)}`);
+  const data = top.map(r => r.true_score);
+
+  if (charts.magnitude) charts.magnitude.destroy();
+  const ctx = document.getElementById('chartMagnitude').getContext('2d');
+  charts.magnitude = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'True Score',
+        data,
+        backgroundColor: (context) => {
+          const idx = context.dataIndex;
+          return idx < 10 ? COLORS.gold : COLORS.blue;
+        },
+        borderColor: COLORS.blue,
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => top[items[0].dataIndex].query,
+            label: (item) => {
+              const r = top[item.dataIndex];
+              const share = fmtPct(r.pct, 2);
+              return [
+                `True Score: ${fmt(r.true_score)}`,
+                `Share: ${share}`,
+                `Rank: #${r.amazon_score}`,
+                `Cum: ${fmtPct(r.cum_pct)}`,
+              ];
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'True Score (points)', color: COLORS.greyMid, font: { size: 11 } },
+          ticks: { color: COLORS.greyMid, callback: (v) => fmt(v) },
+          grid: { color: '#eee' }
+        },
+        y: {
+          ticks: { color: COLORS.black, font: { size: 11 } },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function renderParetoChart() {
+  const rows = DATA.rows;
+  // For readability cap at 200 points on the curve; if more, downsample
+  const max = 200;
+  let curve = rows;
+  if (rows.length > max) {
+    const step = rows.length / max;
+    curve = [];
+    for (let i = 0; i < max; i++) curve.push(rows[Math.floor(i * step)]);
+    curve.push(rows[rows.length - 1]);
+  }
+  const labels = curve.map(r => r.amazon_score);
+  const cumData = curve.map(r => r.cum_pct * 100);
+  const pctData = curve.map(r => r.pct * 100);
+
+  if (charts.pareto) charts.pareto.destroy();
+  const ctx = document.getElementById('chartPareto').getContext('2d');
+  charts.pareto = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Individual % of total',
+          type: 'bar',
+          data: pctData,
+          backgroundColor: COLORS.greyLight,
+          borderWidth: 0,
+          yAxisID: 'yRight',
+          order: 2,
+        },
+        {
+          label: 'Cumulative % of total',
+          data: cumData,
+          borderColor: COLORS.blue,
+          backgroundColor: 'rgba(52, 77, 121, 0.08)',
+          fill: true,
+          tension: 0.2,
+          pointRadius: 0,
+          borderWidth: 2.5,
+          yAxisID: 'yLeft',
+          order: 1,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { color: COLORS.greyMid, font: { size: 11 } } },
+        annotation: {
+          annotations: {
+            line50: {
+              type: 'line', yMin: 50, yMax: 50, yScaleID: 'yLeft',
+              borderColor: COLORS.gold, borderWidth: 2, borderDash: [6, 4],
+              label: {
+                display: true,
+                content: `50% → ${DATA.queriesTo50} queries`,
+                position: 'start',
+                backgroundColor: COLORS.gold,
+                color: COLORS.black,
+                font: { size: 11, weight: 'bold' },
+                padding: 4,
+              }
+            },
+            line80: {
+              type: 'line', yMin: 80, yMax: 80, yScaleID: 'yLeft',
+              borderColor: COLORS.lime, borderWidth: 2, borderDash: [6, 4],
+              label: {
+                display: true,
+                content: `80% → ${DATA.queriesTo80} queries`,
+                position: 'start',
+                backgroundColor: COLORS.lime,
+                color: COLORS.black,
+                font: { size: 11, weight: 'bold' },
+                padding: 4,
+              }
+            },
+            v50: {
+              type: 'line',
+              xMin: labels.indexOf(closest(labels, DATA.queriesTo50)),
+              xMax: labels.indexOf(closest(labels, DATA.queriesTo50)),
+              borderColor: COLORS.gold, borderWidth: 1, borderDash: [3, 3],
+            },
+            v80: {
+              type: 'line',
+              xMin: labels.indexOf(closest(labels, DATA.queriesTo80)),
+              xMax: labels.indexOf(closest(labels, DATA.queriesTo80)),
+              borderColor: COLORS.lime, borderWidth: 1, borderDash: [3, 3],
+            },
+          }
+        },
+        tooltip: {
+          callbacks: {
+            title: (items) => `Rank #${items[0].label}`,
+            label: (item) => `${item.dataset.label}: ${item.parsed.y.toFixed(2)}%`,
+          }
+        }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'Rank (Amazon Search Query Score)', color: COLORS.greyMid, font: { size: 11 } },
+          ticks: { color: COLORS.greyMid, maxTicksLimit: 15 },
+          grid: { display: false }
+        },
+        yLeft: {
+          position: 'left',
+          min: 0, max: 100,
+          title: { display: true, text: 'Cumulative % of total True Score', color: COLORS.blue, font: { size: 11 } },
+          ticks: { color: COLORS.blue, callback: (v) => v + '%' },
+          grid: { color: '#eee' }
+        },
+        yRight: {
+          position: 'right',
+          min: 0,
+          title: { display: true, text: 'Individual query %', color: COLORS.greyMid, font: { size: 11 } },
+          ticks: { color: COLORS.greyMid, callback: (v) => v.toFixed(1) + '%' },
+          grid: { display: false }
+        },
+      }
+    }
+  });
+}
+
+function closest(arr, target) {
+  let best = arr[0], diff = Math.abs(arr[0] - target);
+  for (const v of arr) {
+    const d = Math.abs(v - target);
+    if (d < diff) { diff = d; best = v; }
+  }
+  return best;
+}
+
+function renderStackChart() {
+  const n = parseInt(document.getElementById('topNStack').value) || 15;
+  const top = DATA.rows.slice(0, n);
+  const labels = top.map(r => `#${r.amazon_score} ${truncate(r.query, 20)}`);
+
+  const imp = top.map(r => r.impressions);
+  const clk = top.map(r => r.clicks * W_CLICK);
+  const cart = top.map(r => r.cart_adds * W_CART);
+  const pur = top.map(r => r.purchases * W_PURCHASE);
+
+  if (charts.stack) charts.stack.destroy();
+  const ctx = document.getElementById('chartStack').getContext('2d');
+  charts.stack = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Impressions (×1)', data: imp, backgroundColor: COLORS.greyLight, borderWidth: 0 },
+        { label: 'Clicks (×37)', data: clk, backgroundColor: COLORS.gold, borderWidth: 0 },
+        { label: 'Cart Adds (×256)', data: cart, backgroundColor: COLORS.blue, borderWidth: 0 },
+        { label: 'Purchases (×703)', data: pur, backgroundColor: COLORS.lime, borderColor: '#a3c94a', borderWidth: 1 },
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { color: COLORS.greyMid, font: { size: 11 }, boxWidth: 14 } },
+        tooltip: {
+          callbacks: {
+            title: (items) => top[items[0].dataIndex].query,
+            label: (item) => {
+              const r = top[item.dataIndex];
+              const rawCounts = [r.impressions, r.clicks, r.cart_adds, r.purchases];
+              const raw = rawCounts[item.datasetIndex];
+              return `${item.dataset.label}: ${fmt(item.parsed.x)} pts  (${fmt(raw)} raw)`;
+            },
+            footer: (items) => {
+              const r = top[items[0].dataIndex];
+              return `Total: ${fmt(r.true_score)} pts  (${fmtPct(r.pct, 2)} of grand total)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          title: { display: true, text: 'True Score points (by funnel stage)', color: COLORS.greyMid, font: { size: 11 } },
+          ticks: { color: COLORS.greyMid, callback: (v) => fmt(v) },
+          grid: { color: '#eee' }
+        },
+        y: {
+          stacked: true,
+          ticks: { color: COLORS.black, font: { size: 11 } },
+          grid: { display: false }
+        }
+      }
+    }
+  });
+}
+
+function renderTable(filter = '') {
+  const tbody = document.getElementById('tableBody');
+  const f = filter.trim().toLowerCase();
+  const rows = f ? DATA.rows.filter(r => r.query.toLowerCase().includes(f)) : DATA.rows;
+  const cap = Math.min(rows.length, 500);
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < cap; i++) {
+    const r = rows[i];
+    const tr = document.createElement('tr');
+    if (r.amazon_score <= 10) tr.className = 'top10';
+    tr.innerHTML = `
+      <td>${r.amazon_score}</td>
+      <td>${escapeHtml(r.query)}</td>
+      <td class="num"><strong>${fmt(r.true_score)}</strong></td>
+      <td class="num">${fmtPct(r.pct, 2)}</td>
+      <td class="num">${fmtPct(r.cum_pct, 1)}</td>
+      <td class="num">${fmt(r.impressions)}</td>
+      <td class="num">${fmt(r.clicks)}</td>
+      <td class="num">${fmt(r.cart_adds)}</td>
+      <td class="num">${fmt(r.purchases)}</td>
+      <td class="num">${r.volume !== null ? fmt(r.volume) : ''}</td>
+    `;
+    frag.appendChild(tr);
+  }
+  tbody.innerHTML = '';
+  tbody.appendChild(frag);
+  if (rows.length > cap) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td colspan="10" style="text-align:center;color:#757575;padding:10px">
+      Showing first ${cap.toLocaleString()} of ${rows.length.toLocaleString()} matching rows — refine your filter to see more, or download CSV for the full data.
+    </td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+function bindControls() {
+  document.getElementById('topNBar').onchange = renderMagnitudeChart;
+  document.getElementById('topNStack').onchange = renderStackChart;
+  document.getElementById('searchBox').oninput = (e) => renderTable(e.target.value);
+  ['minImpr', 'minClicks'].forEach(id => {
+    document.getElementById(id).onchange = refreshFunnel;
+  });
+}
+
+// ---------- CSV download ----------
+function downloadCSV() {
+  const headers = ['Rank', 'Search Query', 'True Score', 'Pct of Total', 'Cumulative Pct',
+                   'Impressions', 'Clicks', 'Cart Adds', 'Purchases', 'Search Volume', 'Funnel Stage'];
+  const stageNames = { impression: 'Impression stage', click: 'Click stage', cart: 'Cart stage', purchase: 'Purchase stage', noise: 'Too early to tell' };
+  const rows = DATA.rows.map(r => [
+    r.amazon_score,
+    `"${(r.query || '').replace(/"/g, '""')}"`,
+    r.true_score,
+    (r.pct * 100).toFixed(4),
+    (r.cum_pct * 100).toFixed(4),
+    r.impressions, r.clicks, r.cart_adds, r.purchases,
+    r.volume !== null ? r.volume : '',
+    stageNames[r.stage] || ''
+  ].join(','));
+  const csv = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}_${String(today.getMonth() + 1).padStart(2, '0')}_${String(today.getDate()).padStart(2, '0')}`;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `SQP_True_Score_${dateStr}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
